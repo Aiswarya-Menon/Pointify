@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>File Upload</title>
+    <link rel="stylesheet" href="style2.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Madimi+One&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        
+    </style>
+</head>
+<body>
+    <div class="head-2">
+    <h1>Pointify</h1>
+</div>
+
+    <div class="page-2">
+        <div class="describe">
+            <h2>Experience seamless activity point management with Pointify.<br> 
+                Effortlessly upload your certificates and track your progress.<br>
+                Streamline recognition for your achievements today!</h2>
+        </div>
+    <div id="FileUpload">
+        <div class="wrapper">
+            <div class="upload">
+                <p>Drag files here or <span class="upload__button" id="browseButton">Add</span></p>
+                <input type="file" id="fileInput" multiple style="display: none;" multiple>
+            </div>
+        </div>
+    </div>
+    <div id="uploadedFiles">
+        <ul id="fileList"></ul>
+    </div>
+
+    <div id="popup" class="popup" style="display: none;">
+        <p class="popup__message">One or more files are already uploaded. Please choose different files.</p>
+        <button class="popup__button" onclick="hidePopup()">OK</button>
+    </div>
+
+    <button id="goButton" class="go-button">Go</button>
+    <div id="activityTableContainer">
+        <table id="activityTable">
+            <thead>
+                <tr>
+                    <th>File</th>
+                    <th>Activity Points</th>
+                </tr>
+            </thead>
+            <tbody id="activityTableBody">
+                <!-- Table body will be dynamically populated by JavaScript -->
+            </tbody>
+            <tfoot>
+                <tr>
+                    <th>Total Activity Points</th>
+                    <td id="totalActivityPoints">0</td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+</div>
+<script type="module">
+    import { GoogleGenerativeAI } from "https://esm.run/@google/generative-ai";
+
+    // Access your API key directly
+    const API_KEY = "AIzaSyBGngRN-stYF9VdsSFBcv179w3LcVx3-ss"; // Replace with your actual API key
+
+    const genAI = new GoogleGenerativeAI(API_KEY);
+
+    const allTexts = [];
+
+    async function run() {
+        // Function to convert a File object to a GoogleGenerativeAI.Part object
+        function fileToGenerativePart(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    const dataUrl = event.target.result;
+                    const base64Data = dataUrl.split(',')[1];
+                    resolve({
+                        inlineData: {
+                            data: base64Data,
+                            mimeType: file.type
+                        }
+                    });
+                };
+                reader.onerror = (error) => {
+                    reject(error);
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
+        // For text-and-image input (multimodal), use the gemini-pro-vision model
+        const model = genAI.getGenerativeModel({ model: "gemini-pro-vision" });
+
+        const prompt = "Extract the entire text from each of the certificates given";
+
+        // Get the uploaded files from the file input element
+        const fileInput = document.getElementById('fileInput');
+        const fileList = document.getElementById('fileList');
+        const goButton = document.getElementById('goButton');
+
+        fileInput.addEventListener('change', async function(event) {
+            const files = event.target.files;
+
+            // Check for duplicate file names
+            const existingFiles = Array.from(fileList.querySelectorAll('li')).map(li => li.textContent);
+            const duplicateFiles = Array.from(files).filter(file => existingFiles.includes(file.name));
+
+            if (duplicateFiles.length > 0) {
+                showPopup();
+                return;
+            }
+
+            const imageParts = await Promise.all(Array.from(files).map(async (file) => {
+                return fileToGenerativePart(file);
+            }));
+
+            const result = await model.generateContent([prompt, ...imageParts]);
+            const response = await result.response;
+            const text = response.text();
+            allTexts.push(text); 
+            console.log("Added");
+
+            // Append file names to the list
+            for (let i = 0; i < files.length; i++) {
+                const listItem = document.createElement('li');
+                listItem.textContent = files[i].name;
+                fileList.appendChild(listItem);
+            }
+
+            // Show "Go" button if more than one file uploaded
+            if (fileList.children.length > 1) {
+                goButton.style.display = 'block';
+            } else {
+                goButton.style.display = 'none';
+            }
+        });
+
+        // Browse button functionality
+        document.getElementById('browseButton').addEventListener('click', function() {
+            fileInput.click(); // Trigger click event on file input
+        });
+
+        // Attach event listener to the "Go" button
+        document.addEventListener('DOMContentLoaded', function() {
+            goButton.addEventListener('click', goAction);
+        });
+    }
+
+    // Popup display functions
+    function showPopup() {
+        document.getElementById('popup').style.display = 'block';
+        setTimeout(hidePopup, 3000); // Hide popup after 3 seconds
+    }
+
+    function hidePopup() {
+        document.getElementById('popup').style.display = 'none';
+    }
+
+    function goAction() {
+        // Add your action here when the "Go" button is clicked
+        let totalActivityPoints = 0;
+        let nptelcertcount=0;
+        let cwseIitNitPoints=0;
+        let competitionPoints=0;
+        
+        console.log(allTexts)
+        for (let i = 0; i < allTexts.length; i++) {
+            const responseText = allTexts[i];
+            console.log(i);  
+            let activityPoints = 0;         
+                
+                // Awards for participation in games
+                if (responseText.toLowerCase().includes("games")) {
+                    if (responseText.toLowerCase().includes("international")) {
+                        activityPoints += 60;
+                    } else if (responseText.toLowerCase().includes("national")) {
+                        activityPoints += 40;
+                    } else if (responseText.toLowerCase().includes("state") || responseText.toLowerCase().includes("university")) {
+                        activityPoints += 25;
+                    } else if (responseText.toLowerCase().includes("zonal")) {
+                        activityPoints += 15;
+                    } else if (responseText.toLowerCase().includes("college")) {
+                        activityPoints += 8;
+                    }
+                }
+
+                // Awards for prize positions
+                if (responseText.toLowerCase().includes("first prize")) {
+                    if (responseText.toLowerCase().includes("international")) {
+                        activityPoints += 80; // 60 base points + 20 additional points
+                    } else if (responseText.toLowerCase().includes("national")) {
+                        activityPoints += 60; // 40 base points + 20 additional points
+                    } else if (responseText.toLowerCase().includes("state") || responseText.toLowerCase().includes("university")) {
+                        activityPoints += 35; // 25 base points + 10 additional points
+                    } else if (responseText.toLowerCase().includes("zonal")) {
+                        activityPoints += 25; // 15 base points + 10 additional points
+                    } else if (responseText.toLowerCase().includes("college")) {
+                        activityPoints += 18; // 8 base points + 10 additional points
+                    }
+                } else if (responseText.toLowerCase().includes("second prize")) {
+                    if (responseText.toLowerCase().includes("international")) {
+                        activityPoints += 76; // 60 base points + 16 additional points
+                    } else if (responseText.toLowerCase().includes("national")) {
+                        activityPoints += 56; // 40 base points + 16 additional points
+                    } else if (responseText.toLowerCase().includes("state") || responseText.toLowerCase().includes("university")) {
+                        activityPoints += 33; // 25 base points + 8 additional points
+                    } else if (responseText.toLowerCase().includes("zonal")) {
+                        activityPoints += 23; // 15 base points + 8 additional points
+                    } else if (responseText.toLowerCase().includes("college")) {
+                        activityPoints += 16; // 8 base points + 8 additional points
+                    }
+                } else if (responseText.toLowerCase().includes("third prize")) {
+                    if (responseText.toLowerCase().includes("international")) {
+                        activityPoints += 72; // 60 base points + 12 additional points
+                    } else if (responseText.toLowerCase().includes("national")) {
+                        activityPoints += 52; // 40 base points + 12 additional points
+                    } else if (responseText.toLowerCase().includes("state") || responseText.toLowerCase().includes("university")) {
+                        activityPoints += 30; // 25 base points + 5 additional points
+                    } else if (responseText.toLowerCase().includes("zonal")) {
+                        activityPoints += 20; // 15 base points + 5 additional points
+                    } else if (responseText.toLowerCase().includes("college")) {
+                        activityPoints += 13; // 8 base points + 5 additional points
+                    }
+                }
+
+                //CULTURALS 
+                if (responseText.toLowerCase().includes("Participation") && (responseText.toLowerCase().includes("Music") || responseText.toLowerCase().includes("Dance") || responseText.toLowerCase().includes("Writing") || responseText.toLowerCase().includes("clay modelling") || responseText.toLowerCase().includes("Monoact") || responseText.toLowerCase().includes("Recitation") || responseText.toLowerCase().includes("Extempore"))){
+                    if (responseText.toLowerCase().includes("international")) {
+                        activityPoints += 60;
+                    } else if (responseText.toLowerCase().includes("national")) {
+                        activityPoints += 40;
+                    } else if (responseText.toLowerCase().includes("state") || responseText.toLowerCase().includes("university")) {
+                        activityPoints += 20;
+                    } else if (responseText.toLowerCase().includes("zone")) {
+                        activityPoints += 12;
+                    } else if (responseText.toLowerCase().includes("college")) {
+                        activityPoints += 8;
+                    }
+                }
+
+                // Awards for prize positions
+                if (responseText.toLowerCase().includes("first prize")) {
+                    if (responseText.toLowerCase().includes("international")) {
+                        activityPoints += 80; // 60 base points + 20 additional points
+                    } else if (responseText.toLowerCase().includes("national")) {
+                        activityPoints += 60; // 40 base points + 20 additional points
+                    } else if (responseText.toLowerCase().includes("state") || responseText.toLowerCase().includes("university")) {
+                        activityPoints += 30; // 20 base points + 10 additional points
+                    } else if (responseText.toLowerCase().includes("zonal")) {
+                        activityPoints += 22; // 12 base points + 10 additional points
+                    } else if (responseText.toLowerCase().includes("college")) {
+                        activityPoints += 18; // 8 base points + 10 additional points
+                    }
+                } else if (responseText.toLowerCase().includes("second prize")) {
+                    if (responseText.toLowerCase().includes("international")) {
+                        activityPoints += 76; // 60 base points + 16 additional points
+                    } else if (responseText.toLowerCase().includes("national")) {
+                        activityPoints += 56; // 40 base points + 16 additional points
+                    } else if (responseText.toLowerCase().includes("state") || responseText.toLowerCase().includes("university")) {
+                        activityPoints += 28; // 20 base points + 8 additional points
+                    } else if (responseText.toLowerCase().includes("zonal")) {
+                        activityPoints += 20; // 12 base points + 8 additional points
+                    } else if (responseText.toLowerCase().includes("college")) {
+                        activityPoints += 16; // 8 base points + 8 additional points
+                    }
+                } else if (responseText.toLowerCase().includes("third prize")) {
+                    if (responseText.toLowerCase().includes("international")) {
+                        activityPoints += 72; // 60 base points + 12 additional points
+                    } else if (responseText.toLowerCase().includes("national")) {
+                        activityPoints += 52; // 40 base points + 12 additional points
+                    } else if (responseText.toLowerCase().includes("state") || responseText.toLowerCase().includes("university")) {
+                        activityPoints += 25; // 20 base points + 5 additional points
+                    } else if (responseText.toLowerCase().includes("zonal")) {
+                        activityPoints += 17; // 12 base points + 5 additional points
+                    } else if (responseText.toLowerCase().includes("college")) {
+                        activityPoints += 13; // 8 base points + 5 additional points
+                    }
+                }
+
+                //NSS
+                if (responseText.toLowerCase().includes("national service scheme") || responseText.toLowerCase().includes("Volunteership certificate")) {
+                    activityPoints += 60;
+                }
+
+                //Volunteering certificates
+                if (responseText.toLowerCase().includes("Volunteer") || responseText.toLowerCase().includes("Volunteered")) {
+                    activityPoints += 5;
+                }
+
+
+                //NPTEL
+                
+                if (responseText.toLowerCase().includes("nptel")) { // Corrected text check
+                    if (nptelcertcount == 0) {
+                        nptelcertcount++;
+                        activityPoints += 50;
+                    }
+                }
+
+                //competitions by IEEE,IET,ASME,SAE etc
+                if (responseText.toLowerCase().includes("competition") && (responseText.toLowerCase().includes("ieee") || responseText.toLowerCase().includes("iet") || responseText.toLowerCase().includes("asme") || responseText.toLowerCase().includes("sae"))) {
+                    if (competitionPoints < 40) {
+                        activityPoints += 40;
+                        competitionPoints += 40; // Increment total competition points
+                    }
+                }
+
+                
+                
+               // Check for conferences, workshops, seminars, exhibitions by IIT, NIT
+               if (((responseText.toLowerCase().includes("iit") || responseText.toLowerCase().includes("indian institute of technology")) && (responseText.toLowerCase().includes("workshop"))) || ((responseText.toLowerCase().includes("nit") || responseText.toLowerCase().includes("national institute of technology")) && (responseText.toLowerCase().includes("workshop") || responseText.toLowerCase().includes("participation") || responseText.toLowerCase().includes("seminar")))) {
+                if (cwseIitNitPoints < 30) {
+                    activityPoints += 15;
+                    cwseIitNitPoints += 15;
+                }
+               }
+
+                totalActivityPoints += activityPoints;
+
+                // Add row to the activity table
+                const tableRow = document.createElement('tr');
+                const fileCell = document.createElement('td');
+                const pointsCell = document.createElement('td');
+                const fileName = document.getElementById('fileList').children[i].textContent;
+                fileCell.textContent = fileName
+                pointsCell.textContent = activityPoints;
+                tableRow.appendChild(fileCell);
+                tableRow.appendChild(pointsCell);
+                document.getElementById('activityTableBody').appendChild(tableRow);
+            }
+
+            // Display total activity points
+            document.getElementById('totalActivityPoints').textContent = totalActivityPoints;
+    }
+    
+    run();
+</script>
+</body>
+</html>
+
+
